@@ -1,0 +1,45 @@
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Android
+.gradle/
+local.properties
+*.keystore
+*.jks
+*.properties
+flutter_assistant_android.iml
+
+# iOS/macOS
+.generated/
+DerivedData/
+Pods/
+*.mo
+*.spec
+*.ipa
+*.app
+
+# Web
+.dart_tool/
+build/
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*.DS_Store
+
+# Firebase
+.firebase/
+firebase.json
+firebase_options.dart
+database-rules.json
+firestore.rules
+storage.rules
