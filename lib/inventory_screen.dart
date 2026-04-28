@@ -22,6 +22,12 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
   final List<String> _categoriesEn = ["All", "Beverages", "Pantry/Grains", "Produce", "Meat", "Dairy", "Electronics", "Household", "Beauty/Health", "Clothing", "Hardware", "Stationery", "Pharmacy", "Other"];
   final List<String> _categoriesSw = ["Zote", "Vinywaji", "Chakula na Nafaka", "Matunda na Mboga", "Nyama na Samaki", "Bidhaa za Maziwa", "Elektroniki", "Vifaa vya Nyumbani", "Urembo na Afya", "Mavazi", "Vifaa vya Ujenzi", "Vifaa vya Ofisi", "Dawa", "Nyingine"];
 
+  // Demo data for fallback
+  final List<Map<String, dynamic>> _mockItems = [
+    {'id': '1', 'name': 'Coffee Beans', 'quantity': 12, 'category': 'Vinywaji'},
+    {'id': '2', 'name': 'Whole Milk', 'quantity': 3, 'category': 'Bidhaa za Maziwa'},
+  ];
+
   @override
   Widget build(BuildContext context) {
     final appState = Provider.of<AppStateProvider>(context);
@@ -154,6 +160,13 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
   Future<void> _handleBulkUpload() async {
     final products = await CsvService.pickAndParseCsv();
     if (products != null && products.isNotEmpty) {
+      // Show loading
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Row(children: [CircularProgressIndicator(), SizedBox(width: 20), Text("Importing products...")]), duration: Duration(seconds: 1)),
+        );
+      }
+
       int count = 0;
       for (var product in products) {
         await _saveItemSilently(
@@ -163,9 +176,16 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
         );
         count++;
       }
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Successfully imported $count products!")),
+          SnackBar(content: Text("Successfully imported $count products!"), backgroundColor: Colors.green),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("No products found. Use format: Name, Category, Qty"), backgroundColor: Colors.orange),
         );
       }
     }
@@ -178,21 +198,33 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
     );
 
     if (scannedCode != null && scannedCode.isNotEmpty) {
-      // Check if product exists with this barcode
-      final user = FirebaseAuth.instance.currentUser;
-      final query = await FirebaseFirestore.instance
-          .collection('products')
-          .where('ownerEmail', isEqualTo: user?.email)
-          .where('barcode', isEqualTo: scannedCode)
-          .get();
+      if (isFirebaseInitialized && FirebaseAuth.instance.currentUser != null) {
+        // Cloud Mode Search
+        final user = FirebaseAuth.instance.currentUser;
+        final query = await FirebaseFirestore.instance
+            .collection('products')
+            .where('ownerEmail', isEqualTo: user?.email)
+            .where('barcode', isEqualTo: scannedCode)
+            .get();
 
-      if (query.docs.isNotEmpty) {
-        // Product exists, open edit form
-        final doc = query.docs.first;
-        if (mounted) _showItemForm(context, appState, itemData: doc.data(), itemId: doc.id);
+        if (query.docs.isNotEmpty) {
+          final doc = query.docs.first;
+          if (mounted) _showItemForm(context, appState, itemData: doc.data(), itemId: doc.id);
+        } else {
+          if (mounted) _showItemForm(context, appState, initialBarcode: scannedCode);
+        }
       } else {
-        // New product, open add form with barcode pre-filled
-        if (mounted) _showItemForm(context, appState, initialBarcode: scannedCode);
+        // Demo Mode Search
+        final localMatch = _mockItems.cast<Map<String, dynamic>?>().firstWhere(
+          (i) => i?['barcode'] == scannedCode,
+          orElse: () => null,
+        );
+
+        if (localMatch != null) {
+          if (mounted) _showItemForm(context, appState, itemData: localMatch, itemId: localMatch['id']);
+        } else {
+          if (mounted) _showItemForm(context, appState, initialBarcode: scannedCode);
+        }
       }
     }
   }
@@ -211,10 +243,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
   }
 
   Widget _buildDemoContent(AppStateProvider appState, List<String> categories) {
-    return _buildMainLayout([
-      {'id': '1', 'name': 'Coffee Beans', 'quantity': 12, 'category': categories[1]},
-      {'id': '2', 'name': 'Whole Milk', 'quantity': 3, 'category': categories[5]},
-    ], appState, categories);
+    return _buildMainLayout(_mockItems, appState, categories);
   }
 
   Widget _buildMainLayout(List<Map<String, dynamic>> items, AppStateProvider appState, List<String> categories) {
@@ -459,9 +488,25 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
   }
 
   Future<void> _saveItemSilently({required String name, required String category, required int qty}) async {
-    final data = {'name': name, 'category': category, 'quantity': qty, 'ownerEmail': FirebaseAuth.instance.currentUser?.email, 'updatedAt': FieldValue.serverTimestamp()};
-    if (isFirebaseInitialized) {
+    final data = {
+      'name': name, 
+      'category': category, 
+      'quantity': qty, 
+      'ownerEmail': FirebaseAuth.instance.currentUser?.email, 
+      'updatedAt': FieldValue.serverTimestamp()
+    };
+    
+    if (isFirebaseInitialized && FirebaseAuth.instance.currentUser != null) {
       await FirebaseFirestore.instance.collection('products').add(data);
+    } else {
+      // For Demo Mode, add to the local mock list
+      setState(() {
+        _mockItems.add({
+          'id': DateTime.now().millisecondsSinceEpoch.toString(),
+          ...data,
+          'updatedAt': DateTime.now(),
+        });
+      });
     }
   }
 
@@ -475,8 +520,18 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
       'ownerEmail': FirebaseAuth.instance.currentUser?.email, 
       'updatedAt': FieldValue.serverTimestamp()
     };
-    if (isFirebaseInitialized) {
+    if (isFirebaseInitialized && FirebaseAuth.instance.currentUser != null) {
       itemId != null ? FirebaseFirestore.instance.collection('products').doc(itemId).update(data) : FirebaseFirestore.instance.collection('products').add(data);
+    } else {
+      // Demo Mode save
+      setState(() {
+        if (itemId != null) {
+          int idx = _mockItems.indexWhere((i) => i['id'] == itemId);
+          if (idx != -1) _mockItems[idx] = {'id': itemId, ...data, 'updatedAt': DateTime.now()};
+        } else {
+          _mockItems.add({'id': DateTime.now().millisecondsSinceEpoch.toString(), ...data, 'updatedAt': DateTime.now()});
+        }
+      });
     }
     Navigator.pop(context);
   }
