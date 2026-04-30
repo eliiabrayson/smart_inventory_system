@@ -19,24 +19,27 @@ class CsvService {
         final bytes = result.files.single.bytes!;
         // Normalize line endings to work on all platforms
         final rawCsvString = utf8.decode(bytes);
-        final csvString = rawCsvString.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-        
+        final csvString = rawCsvString
+            .replaceAll('\r\n', '\n')
+            .replaceAll('\r', '\n');
+
         debugPrint("Raw CSV Content: \n$csvString");
 
         // 3. Convert CSV String to a List of Lists
         List<List<dynamic>> csvData = const CsvToListConverter(
-          eol: '\n', // Explicitly look for the newline character we just normalized
+          eol:
+              '\n', // Explicitly look for the newline character we just normalized
           shouldParseNumbers: true,
           allowInvalid: true,
         ).convert(csvString);
-        
+
         debugPrint("CSV Data rows found: ${csvData.length}");
 
         List<Map<String, dynamic>> products = [];
         // We start from 0 if there's no header, but usually 1
         for (var i = 0; i < csvData.length; i++) {
           final row = csvData[i];
-          
+
           // Skip the header row if it's the first one
           if (i == 0 && row[0].toString().toLowerCase().contains("name")) {
             debugPrint("Skipping header row");
