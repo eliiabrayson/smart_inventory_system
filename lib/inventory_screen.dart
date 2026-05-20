@@ -52,26 +52,24 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
         ),
         actions: [
           IconButton(
-            onPressed: () => _showSortOptions(appState),
-            tooltip: appState.translate('tooltip_sort'),
+            onPressed: _showSortOptions,
+            tooltip:
+            appState.translate('tooltip_sort'),
             icon: const Icon(Icons.sort_rounded, color: Colors.blueAccent),
           ),
-          IconButton(
-            tooltip: appState.translate('tooltip_settings'),
-            onPressed: () => _showSettings(context, appState), 
-            icon: const Icon(Icons.settings_outlined, color: Colors.blueAccent),
-          ),
-          IconButton(
-            tooltip: appState.translate('tooltip_logout'),
-            onPressed: () => FirebaseAuth.instance.signOut(), 
-            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-          ),
+          IconButton (tooltip:
+          appState.translate('settings'), 
+            onPressed: () => _showSettings(context, appState), icon: const Icon(Icons.settings_outlined, color: Colors.blueAccent)),
+          IconButton (tooltip:
+          appState.translate('logout'),
+            onPressed: () => FirebaseAuth.instance.signOut(), icon: const Icon(Icons.logout_rounded, color: Colors.redAccent)),
           const SizedBox(width: 8),
         ],
       ),
       body: isFirebaseInitialized ? _buildFirebaseContent(appState, categories) : _buildDemoContent(appState, categories),
-      floatingActionButton: FloatingActionButton.extended(
-        tooltip: appState.translate('tooltip_add'),
+      floatingActionButton: FloatingActionButton.extended (
+        tooltip:
+        appState.translate('tooltip_add'),
         backgroundColor: Colors.blueAccent,
         elevation: 4,
         icon: const Icon(Icons.add_rounded, color: Colors.white),
@@ -81,7 +79,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
     );
   }
 
-  void _showSortOptions(AppStateProvider appState) {
+  void _showSortOptions() {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
@@ -91,7 +89,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(appState.translate('tooltip_sort'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text("Sort Inventory", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             ListTile(
               leading: const Icon(Icons.sort_by_alpha_rounded),
@@ -153,8 +151,8 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
             const Divider(),
             // Bulk Import Feature
             ListTile(
-              title: const Text("Bulk Import (CSV)"),
-              subtitle: const Text("Upload multiple products at once"),
+              title: Text(appState.translate("Bulk Import (CSV)")),
+              subtitle:Text(appState.translate("Upload multiple products at once")),
               leading: const Icon(Icons.upload_file_rounded, color: Colors.green),
               onTap: () {
                 Navigator.pop(context);
@@ -353,8 +351,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
             ),
           ),
           const SizedBox(width: 8),
-          IconButton.filled(
-            tooltip: appState.translate('tooltip_scan'),
+          IconButton.filled(tooltip: appState.translate('scan_product_barcode'),
             onPressed: () => _handleBarcodeScan(appState),
             icon: const Icon(Icons.barcode_reader),
             style: IconButton.styleFrom(backgroundColor: Colors.blueAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
@@ -479,7 +476,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
               SizedBox(
                 width: double.infinity, height: 55,
                 child: Tooltip(
-                  message: appState.translate('tooltip_add'),
+                  message: isEditing ? "Update Item" : "Create Item",
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white),
                     onPressed: () => _saveItem(

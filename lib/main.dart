@@ -100,6 +100,8 @@ class AppStateProvider extends ChangeNotifier {
         'tooltip_close': 'Close Scanner',
         'tooltip_view_password': 'Show/Hide Password',
         'scan_title': 'Scan Product Barcode',
+        'bulk_import': 'Bulk Import (CSV)',
+        'bulk_import_subtitle': 'Upload multiple products at once',
       },
       'sw': {
         'app_name': 'Ghala Mahiri',
@@ -127,6 +129,8 @@ class AppStateProvider extends ChangeNotifier {
         'tooltip_close': 'Funga Skena',
         'tooltip_view_password': 'Onyesha/Ficha Nenosiri',
         'scan_title': 'Skena Msimbo wa Bidhaa',
+        'bulk_import': 'Ingiza kwa Wingi (CSV)',
+        'bulk_import_subtitle': 'Pakia bidhaa nyingi kwa pamoja',
       },
     };
     return localizedValues[_locale.languageCode]?[key] ?? key;

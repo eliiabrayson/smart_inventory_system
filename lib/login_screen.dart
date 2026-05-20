@@ -30,7 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text.trim(),
       );
     } on FirebaseAuthException catch (e) {
-      _showError(_getFriendlyErrorMessage(e));
+      _showError(_getErrorMessage(e));
     } catch (e) {
       _showError("An unexpected error occurred. Please try again.");
     } finally {
@@ -57,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } on FirebaseAuthException catch (e) {
-      _showError(_getFriendlyErrorMessage(e));
+      _showError(_getErrorMessage(e));
     } catch (e) {
       _showError("Registration failed. Please check your connection.");
     } finally {
@@ -82,14 +82,16 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } on FirebaseAuthException catch (e) {
-      _showError(_getFriendlyErrorMessage(e));
+      _showError(_getErrorMessage(e));
     } catch (e) {
       _showError("Could not send reset email. Try again later.");
     }
   }
 
-  String _getFriendlyErrorMessage(FirebaseAuthException e) {
+  String _getErrorMessage(FirebaseAuthException e) {
     switch (e.code) {
+      case 'invalid-credential':
+        return "Invalid email or password. Please try again.";
       case 'user-not-found':
         return "No account exists for this email.";
       case 'wrong-password':
@@ -113,6 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
