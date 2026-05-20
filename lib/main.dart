@@ -1,4 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +11,15 @@ bool isFirebaseInitialized = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final SharedPreferencesWithCache prefs =
+      await SharedPreferencesWithCache.create(
+        cacheOptions: const SharedPreferencesWithCacheOptions(
+          allowList: <String>{'isDarkMode', 'languageCode'},
+        ),
+      );
+
+  bool savedTheme = prefs.getBool('isDarkMode') ?? false;
+  String savedLang = prefs.getString('languageCode') ?? 'en';
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -20,7 +30,11 @@ void main() async {
   }
   runApp(
     ChangeNotifierProvider(
-      create: (_) => AppStateProvider(),
+      create: (_) => AppStateProvider(
+        prefs: prefs,
+        isDarkMode: savedTheme,
+        languageCode: savedLang,
+      ),
       child: const SmartInventoryApp(),
     ),
   );
@@ -28,19 +42,32 @@ void main() async {
 
 // Global state for Theme and Language
 class AppStateProvider extends ChangeNotifier {
-  ThemeMode _themeMode = ThemeMode.light;
+  final SharedPreferencesWithCache _prefs;
+  ThemeMode _themeMode;
   Locale _locale = const Locale('en');
+
+  AppStateProvider({
+    required SharedPreferencesWithCache prefs,
+    bool isDarkMode = false,
+    String languageCode = 'en',
+  }) : _prefs = prefs,
+       _themeMode = isDarkMode ? ThemeMode.dark : ThemeMode.light,
+       _locale = Locale(languageCode);
 
   ThemeMode get themeMode => _themeMode;
   Locale get locale => _locale;
 
   void toggleTheme() {
-    _themeMode = _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+    _themeMode = _themeMode == ThemeMode.light
+        ? ThemeMode.dark
+        : ThemeMode.light;
+    _prefs.setBool('isDarkMode', _themeMode == ThemeMode.dark);
     notifyListeners();
   }
 
   void setLanguage(String langCode) {
     _locale = Locale(langCode);
+    _prefs.setString('languageCode', langCode);
     notifyListeners();
   }
 
@@ -64,6 +91,15 @@ class AppStateProvider extends ChangeNotifier {
         'theme': 'Dark Mode',
         'language': 'Language',
         'logout': 'Sign Out',
+        'tooltip_sort': 'Sort Inventory',
+        'tooltip_add': 'Add New Product',
+        'tooltip_settings': 'App Settings',
+        'tooltip_logout': 'Sign Out',
+        'tooltip_scan': 'Scan Barcode',
+        'tooltip_switch_camera': 'Switch Camera',
+        'tooltip_close': 'Close Scanner',
+        'tooltip_view_password': 'Show/Hide Password',
+        'scan_title': 'Scan Product Barcode',
       },
       'sw': {
         'app_name': 'Ghala Mahiri',
@@ -82,6 +118,15 @@ class AppStateProvider extends ChangeNotifier {
         'theme': 'Hali ya Giza',
         'language': 'Lugha',
         'logout': 'Ondoka',
+        'tooltip_sort': 'Panga Ghala',
+        'tooltip_add': 'Ongeza Bidhaa Mpya',
+        'tooltip_settings': 'Mipangilio ya Programu',
+        'tooltip_logout': 'Ondoka',
+        'tooltip_scan': 'Skena Msimbo',
+        'tooltip_switch_camera': 'Badilisha Kamera',
+        'tooltip_close': 'Funga Skena',
+        'tooltip_view_password': 'Onyesha/Ficha Nenosiri',
+        'scan_title': 'Skena Msimbo wa Bidhaa',
       },
     };
     return localizedValues[_locale.languageCode]?[key] ?? key;
@@ -128,7 +173,9 @@ class AuthGate extends StatelessWidget {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
         if (snapshot.hasData) {
           return const InventoryDashboard();

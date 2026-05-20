@@ -52,16 +52,26 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
         ),
         actions: [
           IconButton(
-            onPressed: _showSortOptions,
+            onPressed: () => _showSortOptions(appState),
+            tooltip: appState.translate('tooltip_sort'),
             icon: const Icon(Icons.sort_rounded, color: Colors.blueAccent),
           ),
-          IconButton(onPressed: () => _showSettings(context, appState), icon: const Icon(Icons.settings_outlined, color: Colors.blueAccent)),
-          IconButton(onPressed: () => FirebaseAuth.instance.signOut(), icon: const Icon(Icons.logout_rounded, color: Colors.redAccent)),
+          IconButton(
+            tooltip: appState.translate('tooltip_settings'),
+            onPressed: () => _showSettings(context, appState), 
+            icon: const Icon(Icons.settings_outlined, color: Colors.blueAccent),
+          ),
+          IconButton(
+            tooltip: appState.translate('tooltip_logout'),
+            onPressed: () => FirebaseAuth.instance.signOut(), 
+            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+          ),
           const SizedBox(width: 8),
         ],
       ),
       body: isFirebaseInitialized ? _buildFirebaseContent(appState, categories) : _buildDemoContent(appState, categories),
       floatingActionButton: FloatingActionButton.extended(
+        tooltip: appState.translate('tooltip_add'),
         backgroundColor: Colors.blueAccent,
         elevation: 4,
         icon: const Icon(Icons.add_rounded, color: Colors.white),
@@ -71,7 +81,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
     );
   }
 
-  void _showSortOptions() {
+  void _showSortOptions(AppStateProvider appState) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
@@ -81,7 +91,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Sort Inventory", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(appState.translate('tooltip_sort'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             ListTile(
               leading: const Icon(Icons.sort_by_alpha_rounded),
@@ -344,6 +354,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
           ),
           const SizedBox(width: 8),
           IconButton.filled(
+            tooltip: appState.translate('tooltip_scan'),
             onPressed: () => _handleBarcodeScan(appState),
             icon: const Icon(Icons.barcode_reader),
             style: IconButton.styleFrom(backgroundColor: Colors.blueAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
@@ -467,16 +478,19 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
               const SizedBox(height: 30),
               SizedBox(
                 width: double.infinity, height: 55,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white),
-                  onPressed: () => _saveItem(
-                    itemId: itemId, 
-                    name: nameController.text, 
-                    category: selectedCat, 
-                    qty: int.tryParse(qtyController.text) ?? 0,
-                    barcode: barcodeController.text,
+                child: Tooltip(
+                  message: appState.translate('tooltip_add'),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white),
+                    onPressed: () => _saveItem(
+                      itemId: itemId, 
+                      name: nameController.text, 
+                      category: selectedCat, 
+                      qty: int.tryParse(qtyController.text) ?? 0,
+                      barcode: barcodeController.text,
+                    ),
+                    child: Text(isEditing ? "UPDATE" : "CREATE"),
                   ),
-                  child: Text(isEditing ? "UPDATE" : "CREATE"),
                 ),
               ),
               const SizedBox(height: 40),

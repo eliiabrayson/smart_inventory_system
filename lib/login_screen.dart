@@ -22,14 +22,17 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
+    } on FirebaseAuthException catch (e) {
+      _showError(_getFriendlyErrorMessage(e));
     } catch (e) {
-      _showError("Login Failed: ${e.toString()}");
+      _showError("An unexpected error occurred. Please try again.");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -41,6 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
     try {
       await FirebaseAuth.instance.createUserWithEmailAndPassword(
@@ -52,8 +56,10 @@ class _LoginScreenState extends State<LoginScreen> {
           const SnackBar(content: Text("Account created successfully!")),
         );
       }
+    } on FirebaseAuthException catch (e) {
+      _showError(_getFriendlyErrorMessage(e));
     } catch (e) {
-      _showError("Registration Failed: ${e.toString()}");
+      _showError("Registration failed. Please check your connection.");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -64,15 +70,44 @@ class _LoginScreenState extends State<LoginScreen> {
       _showError("Enter your email first to reset password");
       return;
     }
+    FocusScope.of(context).unfocus();
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: _emailController.text.trim());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Password reset email sent!")),
+          const SnackBar(
+            content: Text("Reset link sent! Please check your inbox."),
+            backgroundColor: Colors.green,
+          ),
         );
       }
+    } on FirebaseAuthException catch (e) {
+      _showError(_getFriendlyErrorMessage(e));
     } catch (e) {
-      _showError("Error: ${e.toString()}");
+      _showError("Could not send reset email. Try again later.");
+    }
+  }
+
+  String _getFriendlyErrorMessage(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'user-not-found':
+        return "No account exists for this email.";
+      case 'wrong-password':
+        return "Incorrect password. Please try again.";
+      case 'invalid-email':
+        return "The email address is not valid.";
+      case 'email-already-in-use':
+        return "This email is already registered.";
+      case 'user-disabled':
+        return "This account has been disabled.";
+      case 'weak-password':
+        return "Password is too weak. Use at least 6 characters.";
+      case 'network-request-failed':
+        return "Network error. Please check your internet.";
+      case 'too-many-requests':
+        return "Too many attempts. Please try again later.";
+      default:
+        return e.message ?? "Authentication failed. Please try again.";
     }
   }
 
@@ -153,6 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         label: appState.translate('email'),
                         icon: Icons.alternate_email,
                         isDark: isDark,
+                        appState: appState,
                       ),
                       const SizedBox(height: 20),
                       _buildTextField(
@@ -161,15 +197,19 @@ class _LoginScreenState extends State<LoginScreen> {
                         icon: Icons.lock_outline_rounded,
                         isDark: isDark,
                         isPassword: true,
+                        appState: appState,
                       ),
                       
                       Align(
                         alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: _forgotPassword,
-                          child: Text(
-                            appState.translate('forgot_pw'),
-                            style: const TextStyle(fontSize: 13, color: Colors.blueAccent),
+                        child: Tooltip(
+                          message: appState.translate('forgot_pw'),
+                          child: TextButton(
+                            onPressed: _forgotPassword,
+                            child: Text(
+                              appState.translate('forgot_pw'),
+                              style: const TextStyle(fontSize: 13, color: Colors.blueAccent),
+                            ),
                           ),
                         ),
                       ),
@@ -209,11 +249,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       appState.locale.languageCode == 'en' ? "New here?" : "Hujajisajili?",
                       style: TextStyle(color: isDark ? Colors.grey : Colors.blueGrey),
                     ),
-                    TextButton(
-                      onPressed: _register,
-                      child: Text(
-                        appState.translate('register'),
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                    Tooltip(
+                      message: appState.translate('register'),
+                      child: TextButton(
+                        onPressed: _register,
+                        child: Text(
+                          appState.translate('register'),
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                        ),
                       ),
                     ),
                   ],
@@ -221,14 +264,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 
                 // Language Toggle in Login
                 const SizedBox(height: 20),
-                ToggleButtons(
-                  isSelected: [appState.locale.languageCode == 'en', appState.locale.languageCode == 'sw'],
-                  onPressed: (index) {
-                    appState.setLanguage(index == 0 ? 'en' : 'sw');
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  constraints: const BoxConstraints(minHeight: 35, minWidth: 70),
-                  children: const [Text("EN"), Text("SW")],
+                Tooltip(
+                  message: appState.translate('tooltip_settings'),
+                  child: ToggleButtons(
+                    isSelected: [appState.locale.languageCode == 'en', appState.locale.languageCode == 'sw'],
+                    onPressed: (index) {
+                      appState.setLanguage(index == 0 ? 'en' : 'sw');
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    constraints: const BoxConstraints(minHeight: 35, minWidth: 70),
+                    children: const [Text("EN"), Text("SW")],
+                  ),
                 ),
               ],
             ),
@@ -243,6 +289,7 @@ class _LoginScreenState extends State<LoginScreen> {
     required String label,
     required IconData icon,
     required bool isDark,
+    required AppStateProvider appState,
     bool isPassword = false,
   }) {
     return TextField(
@@ -254,6 +301,7 @@ class _LoginScreenState extends State<LoginScreen> {
         labelStyle: TextStyle(color: isDark ? Colors.grey : Colors.blueGrey),
         prefixIcon: Icon(icon, size: 20, color: Colors.blueAccent),
         suffixIcon: isPassword ? IconButton(
+          tooltip: appState.translate('tooltip_view_password'),
           icon: Icon(
             _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
             size: 20, color: Colors.grey,
