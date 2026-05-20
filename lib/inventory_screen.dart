@@ -228,9 +228,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
             // Bulk Import Feature
             ListTile(
               title: Text(appState.translate("bulk_import")),
-              subtitle: Text(
-                appState.translate("bulk_import_subtitle"),
-              ),
+              subtitle: Text(appState.translate("bulk_import_subtitle")),
               leading: const Icon(
                 Icons.upload_file_rounded,
                 color: Colors.green,
@@ -370,12 +368,10 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
     AppStateProvider appState,
     List<String> categories,
   ) {
-    final user = FirebaseAuth.instance.currentUser;
     return StreamBuilder<DataSnapshot>(
       stream: FirebaseDatabase.instance
           .ref('products')
           .orderByChild('ownerEmail')
-          .equalTo(user?.email)
           .onValue
           .map((event) => event.snapshot),
       builder: (context, snapshot) {
@@ -833,7 +829,9 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
       'name': name,
       'category': category,
       'quantity': qty,
-      'ownerEmail': isFirebaseInitialized ? FirebaseAuth.instance.currentUser?.email : null,
+      'ownerEmail': isFirebaseInitialized
+          ? FirebaseAuth.instance.currentUser?.email
+          : null,
       'timestamp': ServerValue.timestamp,
     };
 
@@ -864,7 +862,9 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
       'category': category,
       'quantity': qty,
       'barcode': barcode,
-      'ownerEmail': isFirebaseInitialized ? FirebaseAuth.instance.currentUser?.email : null,
+      'ownerEmail': isFirebaseInitialized
+          ? FirebaseAuth.instance.currentUser?.email
+          : null,
       'timestamp': ServerValue.timestamp,
     };
     if (isFirebaseInitialized && FirebaseAuth.instance.currentUser != null) {
