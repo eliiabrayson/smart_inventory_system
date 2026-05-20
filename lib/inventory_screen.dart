@@ -112,11 +112,12 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
             onPressed: () => _showSettings(context, appState),
             icon: const Icon(Icons.settings_outlined, color: Colors.blueAccent),
           ),
-          IconButton(
-            tooltip: appState.translate('logout'),
-            onPressed: () => FirebaseAuth.instance.signOut(),
-            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-          ),
+          if (isFirebaseInitialized)
+            IconButton(
+              tooltip: appState.translate('logout'),
+              onPressed: () => FirebaseAuth.instance.signOut(),
+              icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+            ),
           const SizedBox(width: 8),
         ],
       ),
@@ -226,9 +227,9 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
             const Divider(),
             // Bulk Import Feature
             ListTile(
-              title: Text(appState.translate("Bulk Import (CSV)")),
+              title: Text(appState.translate("bulk_import")),
               subtitle: Text(
-                appState.translate("Upload multiple products at once"),
+                appState.translate("bulk_import_subtitle"),
               ),
               leading: const Icon(
                 Icons.upload_file_rounded,
@@ -304,25 +305,35 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
       if (isFirebaseInitialized && FirebaseAuth.instance.currentUser != null) {
         // Cloud Mode Search
         final user = FirebaseAuth.instance.currentUser;
-        final query = await FirebaseDatabase.instance
+        final snapshot = await FirebaseDatabase.instance
             .ref('products')
-            .orderByChild('ownerEmail')
-            .equalTo(user?.email)
             .orderByChild('barcode')
             .equalTo(scannedCode)
             .get();
 
-        if (query.exists) {
+        Map<String, dynamic>? matchedItem;
+        String? matchedKey;
+
+        if (snapshot.exists) {
           final Map<dynamic, dynamic> itemsMap =
-              query.value as Map<dynamic, dynamic>;
-          final firstKey = itemsMap.keys.first;
-          final firstItemData = Map<String, dynamic>.from(itemsMap[firstKey]);
+              snapshot.value as Map<dynamic, dynamic>;
+          for (var entry in itemsMap.entries) {
+            final item = Map<String, dynamic>.from(entry.value as Map);
+            if (item['ownerEmail'] == user?.email) {
+              matchedItem = item;
+              matchedKey = entry.key.toString();
+              break;
+            }
+          }
+        }
+
+        if (matchedItem != null) {
           if (mounted) {
             _showItemForm(
               context,
               appState,
-              itemData: firstItemData,
-              itemId: firstKey,
+              itemData: matchedItem,
+              itemId: matchedKey,
             );
           }
         } else {
@@ -557,7 +568,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
           ),
           const SizedBox(width: 8),
           IconButton.filled(
-            tooltip: appState.translate('scan_product_barcode'),
+            tooltip: appState.translate('tooltip_scan'),
             onPressed: () => _handleBarcodeScan(appState),
             icon: const Icon(Icons.barcode_reader),
             style: IconButton.styleFrom(
@@ -822,7 +833,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
       'name': name,
       'category': category,
       'quantity': qty,
-      'ownerEmail': FirebaseAuth.instance.currentUser?.email,
+      'ownerEmail': isFirebaseInitialized ? FirebaseAuth.instance.currentUser?.email : null,
       'timestamp': ServerValue.timestamp,
     };
 
@@ -853,13 +864,13 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
       'category': category,
       'quantity': qty,
       'barcode': barcode,
-      'ownerEmail': FirebaseAuth.instance.currentUser?.email,
-      'ServerValue.timestamp': ServerValue.timestamp,
+      'ownerEmail': isFirebaseInitialized ? FirebaseAuth.instance.currentUser?.email : null,
+      'timestamp': ServerValue.timestamp,
     };
     if (isFirebaseInitialized && FirebaseAuth.instance.currentUser != null) {
       itemId != null
           ? FirebaseDatabase.instance.ref('products').child(itemId).update(data)
-          : FirebaseDatabase.instance.ref('products').update(data);
+          : FirebaseDatabase.instance.ref('products').push().set(data);
     } else {
       // Demo Mode save
       setState(() {

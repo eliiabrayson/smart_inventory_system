@@ -163,7 +163,7 @@ class SmartInventoryApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      home: const AuthGate(),
+      home: isFirebaseInitialized ? const AuthGate() : const InventoryDashboard(),
     );
   }
 }
