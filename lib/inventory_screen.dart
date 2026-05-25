@@ -368,10 +368,12 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
     AppStateProvider appState,
     List<String> categories,
   ) {
+    final user = FirebaseAuth.instance.currentUser;
     return StreamBuilder<DataSnapshot>(
       stream: FirebaseDatabase.instance
           .ref('products')
           .orderByChild('ownerEmail')
+          .equalTo(user?.email)
           .onValue
           .map((event) => event.snapshot),
       builder: (context, snapshot) {

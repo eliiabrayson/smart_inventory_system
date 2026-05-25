@@ -72,7 +72,9 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     FocusScope.of(context).unfocus();
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: _emailController.text.trim());
+      await FirebaseAuth.instance.sendPasswordResetEmail(
+        email: _emailController.text.trim(),
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -132,13 +134,15 @@ class _LoginScreenState extends State<LoginScreen> {
     final isDark = appState.themeMode == ThemeMode.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF121212) : const Color(0xFFF3F4F6),
+      backgroundColor: isDark
+          ? const Color(0xFF121212)
+          : const Color(0xFFF3F4F6),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: isDark 
+            colors: isDark
                 ? [Colors.blueAccent.withValues(alpha: 0.1), Colors.black]
                 : [Colors.blueAccent.withValues(alpha: 0.1), Colors.white],
           ),
@@ -149,7 +153,11 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.inventory_2_rounded, size: 70, color: Colors.blueAccent),
+                const Icon(
+                  Icons.inventory_2_rounded,
+                  size: 70,
+                  color: Colors.blueAccent,
+                ),
                 const SizedBox(height: 12),
                 Text(
                   appState.translate('app_name'),
@@ -162,10 +170,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 Text(
                   appState.translate('welcome'),
-                  style: TextStyle(color: isDark ? Colors.grey[400] : Colors.blueGrey),
+                  style: TextStyle(
+                    color: isDark ? Colors.grey[400] : Colors.blueGrey,
+                  ),
                 ),
                 const SizedBox(height: 40),
-                
+
                 // Form Card
                 Container(
                   padding: const EdgeInsets.all(24),
@@ -178,7 +188,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.3 : 0.05,
+                        ),
                         blurRadius: 20,
                         offset: const Offset(0, 10),
                       ),
@@ -202,7 +214,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         isPassword: true,
                         appState: appState,
                       ),
-                      
+
                       Align(
                         alignment: Alignment.centerRight,
                         child: Tooltip(
@@ -211,13 +223,16 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: _forgotPassword,
                             child: Text(
                               appState.translate('forgot_pw'),
-                              style: const TextStyle(fontSize: 13, color: Colors.blueAccent),
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.blueAccent,
+                              ),
                             ),
                           ),
                         ),
                       ),
                       const SizedBox(height: 12),
-                      
+
                       if (_isLoading)
                         const CircularProgressIndicator(strokeWidth: 3)
                       else ...[
@@ -230,11 +245,16 @@ class _LoginScreenState extends State<LoginScreen> {
                               backgroundColor: Colors.blueAccent,
                               foregroundColor: Colors.white,
                               elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
                             ),
                             child: Text(
                               appState.translate('login'),
-                              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
@@ -242,15 +262,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      appState.locale.languageCode == 'en' ? "New here?" : "Hujajisajili?",
-                      style: TextStyle(color: isDark ? Colors.grey : Colors.blueGrey),
+                      appState.locale.languageCode == 'en'
+                          ? "New here?"
+                          : "Hujajisajili?",
+                      style: TextStyle(
+                        color: isDark ? Colors.grey : Colors.blueGrey,
+                      ),
                     ),
                     Tooltip(
                       message: appState.translate('register'),
@@ -258,24 +282,33 @@ class _LoginScreenState extends State<LoginScreen> {
                         onPressed: _register,
                         child: Text(
                           appState.translate('register'),
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blueAccent,
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
-                
+
                 // Language Toggle in Login
                 const SizedBox(height: 20),
                 Tooltip(
                   message: appState.translate('tooltip_settings'),
                   child: ToggleButtons(
-                    isSelected: [appState.locale.languageCode == 'en', appState.locale.languageCode == 'sw'],
+                    isSelected: [
+                      appState.locale.languageCode == 'en',
+                      appState.locale.languageCode == 'sw',
+                    ],
                     onPressed: (index) {
                       appState.setLanguage(index == 0 ? 'en' : 'sw');
                     },
                     borderRadius: BorderRadius.circular(12),
-                    constraints: const BoxConstraints(minHeight: 35, minWidth: 70),
+                    constraints: const BoxConstraints(
+                      minHeight: 35,
+                      minWidth: 70,
+                    ),
                     children: const [Text("EN"), Text("SW")],
                   ),
                 ),
@@ -303,17 +336,26 @@ class _LoginScreenState extends State<LoginScreen> {
         labelText: label,
         labelStyle: TextStyle(color: isDark ? Colors.grey : Colors.blueGrey),
         prefixIcon: Icon(icon, size: 20, color: Colors.blueAccent),
-        suffixIcon: isPassword ? IconButton(
-          tooltip: appState.translate('tooltip_view_password'),
-          icon: Icon(
-            _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-            size: 20, color: Colors.grey,
-          ),
-          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-        ) : null,
+        suffixIcon: isPassword
+            ? IconButton(
+                tooltip: appState.translate('tooltip_view_password'),
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 20,
+                  color: Colors.grey,
+                ),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              )
+            : null,
         filled: true,
         fillColor: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF9FAFB),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
       ),
     );
   }
