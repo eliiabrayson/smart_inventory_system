@@ -5,6 +5,10 @@ import 'package:provider/provider.dart';
 import 'main.dart';
 import 'services/csv_service.dart';
 import 'scanner_screen.dart';
+import 'screens/smart_modules_hub_screen.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:flutter/services.dart';
 
 class InventoryDashboard extends StatefulWidget {
   const InventoryDashboard({super.key});
@@ -27,6 +31,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
     {'id': '1', 'name': 'Coffee Beans', 'quantity': 12, 'category': 'Vinywaji'},
     {'id': '2', 'name': 'Whole Milk', 'quantity': 3, 'category': 'Bidhaa za Maziwa'},
   ];
+  bool _forecastRunning = false;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +60,17 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
             onPressed: _showSortOptions,
             icon: const Icon(Icons.sort_rounded, color: Colors.blueAccent),
           ),
+          IconButton(
+            onPressed: () => _runBatchForecast(),
+            icon: const Icon(Icons.analytics_rounded, color: Colors.blueAccent),
+            tooltip: 'Batch Forecast',
+          ),
+          // Smart Modules quick access
+          IconButton(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SmartModulesHubScreen())),
+            icon: const Icon(Icons.auto_awesome, color: Colors.blueAccent),
+            tooltip: 'Smart Modules',
+          ),
           IconButton(onPressed: () => _showSettings(context, appState), icon: const Icon(Icons.settings_outlined, color: Colors.blueAccent)),
           IconButton(onPressed: () => FirebaseAuth.instance.signOut(), icon: const Icon(Icons.logout_rounded, color: Colors.redAccent)),
           const SizedBox(width: 8),
@@ -67,6 +83,200 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
         icon: const Icon(Icons.add_rounded, color: Colors.white),
         label: Text(appState.translate('add_product'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         onPressed: () => _showItemForm(context, appState),
+      ),
+    );
+  }
+
+  Future<void> _runBatchForecast() async {
+    if (_forecastRunning) return;
+    _forecastRunning = true;
+    setState(() {});
+    final appState = Provider.of<AppStateProvider>(context, listen: false);
+    List<Map<String, dynamic>> items;
+    if (isFirebaseInitialized && FirebaseAuth.instance.currentUser != null) {
+      final user = FirebaseAuth.instance.currentUser;
+      final snap = await FirebaseFirestore.instance.collection('products').where('ownerEmail', isEqualTo: user?.email).get();
+      items = snap.docs.map((d) => {...(d.data() as Map<String, dynamic>), 'id': d.id}).toList();
+    } else {
+      items = List<Map<String, dynamic>>.from(_mockItems);
+    }
+
+    if (items.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No items to forecast')));
+      return;
+    }
+
+    // Build batch payload
+    final month = DateTime.now().month;
+    String season = 'spring';
+    if (month >= 3 && month <= 5) season = 'spring';
+    if (month >= 6 && month <= 8) season = 'summer';
+    if (month >= 9 && month <= 11) season = 'autumn';
+    if (month == 12 || month <= 2) season = 'winter';
+
+    final lat = -1.2921;
+    final lon = 36.8219;
+
+    final itemList = await Future.wait(items.map((it) async {
+        final qty = (it['quantity'] is int) ? (it['quantity'] as int).toDouble() : (double.tryParse(it['quantity']?.toString() ?? '0') ?? 0.0);
+        final features = [qty / 100.0, 0.0, 0.0, 0.0, 0.0];
+        // Attach recent sales history per item (last 30 days)
+        List<Map<String, dynamic>> salesHistory = [];
+        if (isFirebaseInitialized && FirebaseAuth.instance.currentUser != null) {
+          try {
+            final snap = await FirebaseFirestore.instance.collection('sales').where('productId', isEqualTo: it['id']).orderBy('timestamp', descending: true).limit(50).get();
+            salesHistory = snap.docs.map((d) {
+              final data = d.data();
+              return {
+                'qty': data['qty'] ?? 0,
+                'timestamp': data['timestamp'] is Timestamp ? (data['timestamp'] as Timestamp).toDate().toIso8601String() : (data['timestamp']?.toString() ?? ''),
+              };
+            }).toList();
+          } catch (_) {}
+        } else {
+          // Use appState in-memory sales history for demo
+          salesHistory = appState.salesHistory.where((s) => s['productId'] == it['id']).map((s) => {'qty': s['qty'], 'timestamp': s['timestamp']}).toList();
+        }
+        return {
+          'features': features,
+          'season': season,
+          'latitude': lat,
+          'longitude': lon,
+          'fetch_weather': true,
+          'country_code': 'KE',
+          'sales_history': salesHistory,
+        };
+      }));
+    final body = {'items': itemList};
+
+    try {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Running batch forecast...')));
+      final url = Uri.parse('http://127.0.0.1:8000/forecast_batch');
+      final resp = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode(body)).timeout(const Duration(seconds: 20));
+      if (resp.statusCode == 200) {
+        final map = jsonDecode(resp.body) as Map<String, dynamic>;
+        final results = (map['results'] as List).cast<Map<String, dynamic>>();
+        // Pair results with items
+        final paired = <Map<String, dynamic>>[];
+        for (var i = 0; i < items.length; i++) {
+          final it = items[i];
+          final pred = results.length > i ? (results[i]['prediction'] as num).toDouble() : 0.0;
+          final qty = (it['quantity'] is int) ? it['quantity'] as int : int.tryParse(it['quantity']?.toString() ?? '0') ?? 0;
+          final suggested = (pred - qty).round();
+          paired.add({'id': it['id'], 'name': it['name'] ?? 'Unknown', 'qty': qty, 'prediction': pred, 'suggested': suggested});
+        }
+        if (mounted) _showForecastResults(paired);
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Forecast failed: ${resp.statusCode}')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Forecast error: $e')));
+    } finally {
+      _forecastRunning = false;
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _showForecastResults(List<Map<String, dynamic>> paired) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Batch Forecast Results'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Expanded(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: paired.length,
+                  separatorBuilder: (_, __) => const Divider(),
+                  itemBuilder: (context, i) {
+                    final p = paired[i];
+                    return ListTile(
+                      title: Text(p['name']),
+                      subtitle: Text('Current: ${p['qty']}, Predicted: ${p['prediction'].toStringAsFixed(2)}'),
+                      trailing: Text('Reorder: ${p['suggested']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () async {
+                      // Build CSV
+                      final rows = <String>[];
+                      rows.add('name,quantity,predicted,reorder');
+                      for (final p in paired) {
+                        rows.add('${p['name']},${p['qty']},${p['prediction']},${p['suggested']}');
+                      }
+                      final csv = rows.join('\n');
+                      // Copy to clipboard
+                      try {
+                        await Clipboard.setData(ClipboardData(text: csv));
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('CSV copied to clipboard')));
+                      } catch (e) {
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to copy CSV: $e')));
+                      }
+                    },
+                    child: const Text('Copy CSV'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () async {
+                      final apply = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+                        title: const Text('Apply Reorder'),
+                        content: const Text('This will update product quantities by adding suggested reorder amounts. Continue?'),
+                        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Apply'))],
+                      ));
+                      if (apply != true) return;
+                      try {
+                        if (isFirebaseInitialized && FirebaseAuth.instance.currentUser != null) {
+                          final batch = FirebaseFirestore.instance.batch();
+                          final user = FirebaseAuth.instance.currentUser;
+                          for (final p in paired) {
+                            final id = p['id'];
+                            final suggested = (p['suggested'] is int) ? p['suggested'] as int : (p['suggested'] as num).round();
+                            if (suggested > 0 && id != null) {
+                              final docRef = FirebaseFirestore.instance.collection('products').doc(id);
+                              batch.update(docRef, {'quantity': FieldValue.increment(suggested)});
+                            }
+                          }
+                          await batch.commit();
+                        } else {
+                          // Demo mode: update local mock list
+                          setState(() {
+                            for (final p in paired) {
+                              final id = p['id'];
+                              final suggested = (p['suggested'] is int) ? p['suggested'] as int : (p['suggested'] as num).round();
+                              if (suggested > 0) {
+                                final idx = _mockItems.indexWhere((m) => m['id'] == id);
+                                if (idx != -1) {
+                                  final cur = _mockItems[idx];
+                                  cur['quantity'] = (cur['quantity'] ?? 0) + suggested;
+                                }
+                              }
+                            }
+                          });
+                        }
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reorder applied')));
+                        Navigator.pop(context);
+                      } catch (e) {
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to apply reorder: $e')));
+                      }
+                    },
+                    child: const Text('Apply Reorder'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
       ),
     );
   }
@@ -406,6 +616,51 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
       ),
       child: ListTile(
         onTap: () => _showItemForm(context, appState, itemData: data, itemId: id),
+        onLongPress: () async {
+          // Record a sale quickly via long press
+          final qtyToSellStr = await showDialog<String?>(context: context, builder: (ctx) {
+            final ctrl = TextEditingController();
+            return AlertDialog(
+              title: const Text('Record Sale'),
+              content: TextField(controller: ctrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Quantity sold')),
+              actions: [TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(ctx, ctrl.text), child: const Text('Record'))],
+            );
+          });
+          if (qtyToSellStr == null) return;
+          final qtyToSell = int.tryParse(qtyToSellStr) ?? 0;
+          if (qtyToSell <= 0) return;
+          // Update Firestore or demo list
+          if (isFirebaseInitialized && FirebaseAuth.instance.currentUser != null) {
+            try {
+              final docRef = FirebaseFirestore.instance.collection('products').doc(id);
+              await docRef.update({'quantity': FieldValue.increment(-qtyToSell)});
+              // Persist sale record
+              await FirebaseFirestore.instance.collection('sales').add({
+                'productId': id,
+                'name': data['name'],
+                'qty': qtyToSell,
+                'amount': 0.0,
+                'timestamp': FieldValue.serverTimestamp(),
+                'ownerEmail': FirebaseAuth.instance.currentUser?.email,
+              });
+              appState.recordSale(productId: id, name: data['name'] ?? 'Unknown', qty: qtyToSell, amount: 0.0, userEmail: FirebaseAuth.instance.currentUser?.email);
+              if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sale recorded')));
+            } catch (e) {
+              if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to record sale: $e')));
+            }
+          } else {
+            // Demo mode
+            setState(() {
+              final idx = _mockItems.indexWhere((m) => m['id'] == id);
+              if (idx != -1) {
+                final cur = _mockItems[idx];
+                cur['quantity'] = (cur['quantity'] ?? 0) - qtyToSell;
+              }
+            });
+            appState.recordSale(productId: id, name: data['name'] ?? 'Unknown', qty: qtyToSell, amount: 0.0);
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sale recorded (demo)')));
+          }
+        },
         contentPadding: const EdgeInsets.all(12),
         leading: Container(
           width: 50, height: 50,
@@ -420,11 +675,61 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
             if (data['barcode'] != null) Text("Code: ${data['barcode']}", style: const TextStyle(fontSize: 9, color: Colors.blueAccent)),
           ],
         ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-          child: Text(qty.toString(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: statusColor)),
-        ),
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+            child: Text(qty.toString(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: statusColor)),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.point_of_sale, size: 20),
+            color: Colors.blueAccent,
+            onPressed: () async {
+              // Quick record sale action
+              final qtyToSellStr = await showDialog<String?>(context: context, builder: (ctx) {
+                final ctrl = TextEditingController();
+                return AlertDialog(
+                  title: const Text('Record Sale'),
+                  content: TextField(controller: ctrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Quantity sold')),
+                  actions: [TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(ctx, ctrl.text), child: const Text('Record'))],
+                );
+              });
+              if (qtyToSellStr == null) return;
+              final qtyToSell = int.tryParse(qtyToSellStr) ?? 0;
+              if (qtyToSell <= 0) return;
+              // Reuse the long-press logic
+              if (isFirebaseInitialized && FirebaseAuth.instance.currentUser != null) {
+                try {
+                  final docRef = FirebaseFirestore.instance.collection('products').doc(id);
+                  await docRef.update({'quantity': FieldValue.increment(-qtyToSell)});
+                  await FirebaseFirestore.instance.collection('sales').add({
+                    'productId': id,
+                    'name': data['name'],
+                    'qty': qtyToSell,
+                    'amount': 0.0,
+                    'timestamp': FieldValue.serverTimestamp(),
+                    'ownerEmail': FirebaseAuth.instance.currentUser?.email,
+                  });
+                  appState.recordSale(productId: id, name: data['name'] ?? 'Unknown', qty: qtyToSell, amount: 0.0, userEmail: FirebaseAuth.instance.currentUser?.email);
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sale recorded')));
+                } catch (e) {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to record sale: $e')));
+                }
+              } else {
+                setState(() {
+                  final idx = _mockItems.indexWhere((m) => m['id'] == id);
+                  if (idx != -1) {
+                    final cur = _mockItems[idx];
+                    cur['quantity'] = (cur['quantity'] ?? 0) - qtyToSell;
+                  }
+                });
+                appState.recordSale(productId: id, name: data['name'] ?? 'Unknown', qty: qtyToSell, amount: 0.0);
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sale recorded (demo)')));
+              }
+            },
+          ),
+        ]),
       ),
     );
   }

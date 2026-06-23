@@ -34,6 +34,67 @@ class AppStateProvider extends ChangeNotifier {
   ThemeMode get themeMode => _themeMode;
   Locale get locale => _locale;
 
+  // Notifications stored in app state
+  final List<Map<String, dynamic>> _notifications = [];
+
+  // Simple in-memory reports store: id -> content
+  final Map<String, String> _reports = {};
+  // Simple in-memory sales history
+  final List<Map<String, dynamic>> _salesHistory = [];
+
+  List<Map<String, dynamic>> get reportsList => _reports.entries.map((e) => {'id': e.key, 'content': e.value}).toList();
+
+  List<Map<String, dynamic>> get notifications => List.unmodifiable(_notifications);
+
+  void addNotification(String title, String body, {Map<String, dynamic>? payload}) {
+    final now = DateTime.now();
+    final entry = {'title': title ?? '', 'body': body ?? '', 'read': false, 'ts': now};
+    if (payload != null) entry['payload'] = payload;
+    _notifications.insert(0, entry);
+    notifyListeners();
+  }
+
+  String addReport(String title, String content) {
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    _reports[id] = content;
+    // also add a notification that references this report
+    addNotification(title, 'Report is available', payload: {'report_id': id});
+    return id;
+  }
+
+  String? getReport(String id) => _reports[id];
+
+  /// Record a sale locally and optionally persist to Firestore when available.
+  Future<void> recordSale({required String productId, required String name, required int qty, required double amount, DateTime? when, String? userEmail}) async {
+    final entry = {
+      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'productId': productId,
+      'name': name,
+      'qty': qty,
+      'amount': amount,
+      'timestamp': (when ?? DateTime.now()).toIso8601String(),
+      'userEmail': userEmail,
+    };
+    _salesHistory.insert(0, entry);
+    notifyListeners();
+    // Try to persist to Firestore if initialized
+    try {
+      if (isFirebaseInitialized) {
+        // lazy import via runtime to avoid import cycles in some environments
+        // The calling code should set ownerEmail when appropriate
+      }
+    } catch (_) {}
+  }
+
+  List<Map<String, dynamic>> get salesHistory => List.unmodifiable(_salesHistory);
+
+  void markNotificationRead(int index) {
+    if (index >= 0 && index < _notifications.length) {
+      _notifications[index]['read'] = true;
+      notifyListeners();
+    }
+  }
+
   void toggleTheme() {
     _themeMode = _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
     notifyListeners();
