@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "291681117940",
+    "firebase_url": "https://smart-inventory-system-f25d6-default-rtdb.firebaseio.com",
     "project_id": "smart-inventory-system-f25d6",
     "storage_bucket": "smart-inventory-system-f25d6.firebasestorage.app"
   },
@@ -12,7 +13,12 @@
           "package_name": "com.example.smart_inventory_system"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "291681117940-efsk7n6ces386i4snfckgji1u961rro9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyD637BfGT6-GmkqIES9BRDX7LB1vCIJBEU"
@@ -20,7 +26,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "291681117940-efsk7n6ces386i4snfckgji1u961rro9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "291681117940-ehqmh2oj65peggk5hp9pa5odl5all6f1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.smartInventorySystem"
+              }
+            }
+          ]
         }
       }
     }
