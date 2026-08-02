@@ -39,6 +39,15 @@ dependencies:
   csv: ^6.0.0
   mobile_scanner: ^5.2.3
   http: ^1.6.0
+  fl_chart: ^0.68.0 # For charts and visualizations
+  pdf: ^3.11.1 # For PDF export
+  excel: ^4.0.6 # For Excel export
+  flutter_local_notifications: ^17.2.3 # For local notifications
+  firebase_messaging: ^16.2.0 # For push notifications (compatible version)
+  audioplayers: ^6.1.0 # For sound feedback
+  vibration: ^2.0.0 # For vibration feedback
+  share_plus: ^7.0.0 # For sharing reports
+  path_provider: ^2.1.4 # For file storage
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -67,9 +76,8 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  assets:
+    - assets/sounds/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -11,7 +11,6 @@ plugins {
 android {
     namespace = "com.example.smart_inventory_system"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'main.dart'; // To access AppStateProvider
@@ -15,6 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  String _selectedRole = 'admin';
 
   Future<void> _login() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
@@ -43,10 +45,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
+      
+      // Save user role to Firestore
+      if (userCredential.user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+          'email': _emailController.text.trim(),
+          'role': _selectedRole,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Account created successfully!")),
@@ -101,8 +113,8 @@ class _LoginScreenState extends State<LoginScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: isDark 
-                ? [Colors.blueAccent.withValues(alpha: 0.1), Colors.black]
-                : [Colors.blueAccent.withValues(alpha: 0.1), Colors.white],
+                ? [Colors.blueAccent.withOpacity(0.1), Colors.black]
+                : [Colors.blueAccent.withOpacity(0.1), Colors.white],
           ),
         ),
         child: Center(
@@ -135,12 +147,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: Colors.blueAccent.withValues(alpha: 0.1),
+                      color: Colors.blueAccent.withOpacity(0.1),
                       width: 2,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+                        color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
                         blurRadius: 20,
                         offset: const Offset(0, 10),
                       ),
@@ -161,6 +173,38 @@ class _LoginScreenState extends State<LoginScreen> {
                         icon: Icons.lock_outline_rounded,
                         isDark: isDark,
                         isPassword: true,
+                      ),
+                      
+                      // Role Selection for Registration
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Text(
+                            appState.locale.languageCode == 'en' ? "Register as:" : "Jisajili kama:",
+                            style: TextStyle(color: isDark ? Colors.grey : Colors.blueGrey, fontSize: 14),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: SegmentedButton<String>(
+                              segments: const [
+                                ButtonSegment(
+                                  value: 'admin',
+                                  label: Text('Admin'),
+                                  icon: Icon(Icons.admin_panel_settings, size: 16),
+                                ),
+                                ButtonSegment(
+                                  value: 'customer',
+                                  label: Text('Customer'),
+                                  icon: Icon(Icons.person, size: 16),
+                                ),
+                              ],
+                              selected: {_selectedRole},
+                              onSelectionChanged: (Set<String> newSelection) {
+                                setState(() => _selectedRole = newSelection.first);
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                       
                       Align(

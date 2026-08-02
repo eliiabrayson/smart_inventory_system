@@ -6,6 +6,7 @@ import 'main.dart';
 import 'services/csv_service.dart';
 import 'scanner_screen.dart';
 import 'screens/smart_modules_hub_screen.dart';
+import 'screens/dashboard_screen.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
@@ -65,6 +66,11 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
             icon: const Icon(Icons.analytics_rounded, color: Colors.blueAccent),
             tooltip: 'Batch Forecast',
           ),
+          IconButton(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DashboardScreen())),
+            icon: const Icon(Icons.dashboard_rounded, color: Colors.blueAccent),
+            tooltip: 'Dashboard',
+          ),
           // Smart Modules quick access
           IconButton(
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SmartModulesHubScreen())),
@@ -91,7 +97,6 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
     if (_forecastRunning) return;
     _forecastRunning = true;
     setState(() {});
-    final appState = Provider.of<AppStateProvider>(context, listen: false);
     List<Map<String, dynamic>> items;
     if (isFirebaseInitialized && FirebaseAuth.instance.currentUser != null) {
       final user = FirebaseAuth.instance.currentUser;
@@ -107,46 +112,22 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
     }
 
     // Build batch payload
-    final month = DateTime.now().month;
-    String season = 'spring';
-    if (month >= 3 && month <= 5) season = 'spring';
-    if (month >= 6 && month <= 8) season = 'summer';
-    if (month >= 9 && month <= 11) season = 'autumn';
-    if (month == 12 || month <= 2) season = 'winter';
-
     final lat = -1.2921;
     final lon = 36.8219;
 
-    final itemList = await Future.wait(items.map((it) async {
+    final itemList = items.map((it) {
         final qty = (it['quantity'] is int) ? (it['quantity'] as int).toDouble() : (double.tryParse(it['quantity']?.toString() ?? '0') ?? 0.0);
         final features = [qty / 100.0, 0.0, 0.0, 0.0, 0.0];
-        // Attach recent sales history per item (last 30 days)
-        List<Map<String, dynamic>> salesHistory = [];
-        if (isFirebaseInitialized && FirebaseAuth.instance.currentUser != null) {
-          try {
-            final snap = await FirebaseFirestore.instance.collection('sales').where('productId', isEqualTo: it['id']).orderBy('timestamp', descending: true).limit(50).get();
-            salesHistory = snap.docs.map((d) {
-              final data = d.data();
-              return {
-                'qty': data['qty'] ?? 0,
-                'timestamp': data['timestamp'] is Timestamp ? (data['timestamp'] as Timestamp).toDate().toIso8601String() : (data['timestamp']?.toString() ?? ''),
-              };
-            }).toList();
-          } catch (_) {}
-        } else {
-          // Use appState in-memory sales history for demo
-          salesHistory = appState.salesHistory.where((s) => s['productId'] == it['id']).map((s) => {'qty': s['qty'], 'timestamp': s['timestamp']}).toList();
-        }
         return {
           'features': features,
-          'season': season,
+          'calendar_event': 0,
+          'lead_time': 7.0,
+          'market_trend': 0.0,
           'latitude': lat,
           'longitude': lon,
           'fetch_weather': true,
-          'country_code': 'KE',
-          'sales_history': salesHistory,
         };
-      }));
+      }).toList();
     final body = {'items': itemList};
 
     try {
@@ -178,12 +159,15 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
   }
 
   void _showForecastResults(List<Map<String, dynamic>> paired) {
+    final appState = Provider.of<AppStateProvider>(context, listen: false);
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Batch Forecast Results'),
         content: SizedBox(
           width: double.maxFinite,
+          height: 500,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -198,6 +182,94 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
                       title: Text(p['name']),
                       subtitle: Text('Current: ${p['qty']}, Predicted: ${p['prediction'].toStringAsFixed(2)}'),
                       trailing: Text('Reorder: ${p['suggested']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    );
+                  },
+                ),
+              ),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text('Recommendations:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: paired.length,
+                  separatorBuilder: (_, __) => const Divider(),
+                  itemBuilder: (context, i) {
+                    final p = paired[i];
+                    final predictedSales = (p['prediction'] as num).round();
+                    final currentStock = p['qty'] as int;
+                    final suggested = p['suggested'] as int;
+                    
+                    if (suggested <= 0 && predictedSales <= currentStock) return const SizedBox.shrink();
+                    
+                    return Card(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      color: Colors.green.withOpacity(0.1),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.shopping_cart, color: Colors.green, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    p['name'],
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Predicted Sales', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                    Text(
+                                      '$predictedSales units',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blue),
+                                    ),
+                                  ],
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    const Text('Current Stock', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                    Text(
+                                      '$currentStock units',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                    ),
+                                  ],
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    const Text('Order', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                    Text(
+                                      '$suggested units',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            if (suggested > 0)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  'Order $suggested units to meet predicted demand of $predictedSales',
+                                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     );
                   },
                 ),
@@ -225,58 +297,39 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
                     },
                     child: const Text('Copy CSV'),
                   ),
-                  const SizedBox(width: 8),
                   ElevatedButton(
-                    onPressed: () async {
-                      final apply = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-                        title: const Text('Apply Reorder'),
-                        content: const Text('This will update product quantities by adding suggested reorder amounts. Continue?'),
-                        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Apply'))],
-                      ));
-                      if (apply != true) return;
-                      try {
-                        if (isFirebaseInitialized && FirebaseAuth.instance.currentUser != null) {
-                          final batch = FirebaseFirestore.instance.batch();
-                          final user = FirebaseAuth.instance.currentUser;
-                          for (final p in paired) {
-                            final id = p['id'];
-                            final suggested = (p['suggested'] is int) ? p['suggested'] as int : (p['suggested'] as num).round();
-                            if (suggested > 0 && id != null) {
-                              final docRef = FirebaseFirestore.instance.collection('products').doc(id);
-                              batch.update(docRef, {'quantity': FieldValue.increment(suggested)});
-                            }
-                          }
-                          await batch.commit();
-                        } else {
-                          // Demo mode: update local mock list
-                          setState(() {
-                            for (final p in paired) {
-                              final id = p['id'];
-                              final suggested = (p['suggested'] is int) ? p['suggested'] as int : (p['suggested'] as num).round();
-                              if (suggested > 0) {
-                                final idx = _mockItems.indexWhere((m) => m['id'] == id);
-                                if (idx != -1) {
-                                  final cur = _mockItems[idx];
-                                  cur['quantity'] = (cur['quantity'] ?? 0) + suggested;
-                                }
-                              }
-                            }
-                          });
-                        }
-                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reorder applied')));
+                    onPressed: () {
+                      // Create notification with recommendations
+                      final recommendations = paired.where((p) => (p['suggested'] as int) > 0).toList();
+                      if (recommendations.isNotEmpty) {
+                        final recText = recommendations.map((p) => '${p['name']}: ${p['suggested']} units').join(', ');
+                        appState.addNotification(
+                          'Stock Recommendations',
+                          'Recommended orders: $recText',
+                          payload: {
+                            'type': 'recommendation',
+                            'items': recommendations,
+                          },
+                        );
                         Navigator.pop(context);
-                      } catch (e) {
-                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to apply reorder: $e')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Recommendations added to notifications')),
+                        );
                       }
                     },
-                    child: const Text('Apply Reorder'),
+                    child: const Text('Save to Notifications'),
                   ),
                 ],
               ),
             ],
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
   }
@@ -383,6 +436,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
           name: product['name'],
           category: product['category'],
           qty: product['quantity'],
+          price: double.tryParse(product['price']?.toString() ?? '0') ?? 0.0,
         );
         count++;
       }
@@ -444,6 +498,9 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('products').where('ownerEmail', isEqualTo: user?.email).snapshots(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _buildMainLayout(_mockItems, appState, categories);
+        }
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final docs = snapshot.data!.docs;
         final allData = docs.map((d) => {...(d.data() as Map<String, dynamic>), 'id': d.id}).toList();
@@ -513,9 +570,9 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
       margin: const EdgeInsets.only(right: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.05),
+        color: color.withOpacity(0.05),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.1)),
+        border: Border.all(color: color.withOpacity(0.1)), 
       ),
       child: Row(
         children: [
@@ -612,7 +669,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: ListTile(
         onTap: () => _showItemForm(context, appState, itemData: data, itemId: id),
@@ -664,7 +721,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
         contentPadding: const EdgeInsets.all(12),
         leading: Container(
           width: 50, height: 50,
-          decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(15)),
+          decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(15)), 
           child: Icon(Icons.inventory_2_rounded, color: statusColor),
         ),
         title: Text(data['name'] ?? "Unknown", style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -678,7 +735,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), 
             child: Text(qty.toString(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: statusColor)),
           ),
           const SizedBox(width: 8),
@@ -738,6 +795,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
     final isEditing = itemData != null;
     final nameController = TextEditingController(text: itemData?['name'] ?? "");
     final qtyController = TextEditingController(text: itemData?['quantity']?.toString() ?? "");
+    final priceController = TextEditingController(text: itemData?['price']?.toString() ?? "");
     final barcodeController = TextEditingController(text: itemData?['barcode'] ?? initialBarcode ?? "");
     final categories = appState.locale.languageCode == 'sw' ? _categoriesSw : _categoriesEn;
     String selectedCat = itemData?['category'] ?? categories[categories.length - 1];
@@ -769,6 +827,8 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
               ),
               const SizedBox(height: 16),
               TextField(controller: qtyController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Quantity")),
+              const SizedBox(height: 16),
+              TextField(controller: priceController, keyboardType: TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: "Price (USD)")),
               const SizedBox(height: 30),
               SizedBox(
                 width: double.infinity, height: 55,
@@ -779,6 +839,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
                     name: nameController.text, 
                     category: selectedCat, 
                     qty: int.tryParse(qtyController.text) ?? 0,
+                    price: double.tryParse(priceController.text) ?? 0.0,
                     barcode: barcodeController.text,
                   ),
                   child: Text(isEditing ? "UPDATE" : "CREATE"),
@@ -792,11 +853,12 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
     );
   }
 
-  Future<void> _saveItemSilently({required String name, required String category, required int qty}) async {
+  Future<void> _saveItemSilently({required String name, required String category, required int qty, double price = 0.0}) async {
     final data = {
       'name': name, 
       'category': category, 
       'quantity': qty, 
+      'price': price,
       'ownerEmail': FirebaseAuth.instance.currentUser?.email, 
       'updatedAt': FieldValue.serverTimestamp()
     };
@@ -815,12 +877,13 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
     }
   }
 
-  void _saveItem({String? itemId, required String name, required String category, required int qty, String? barcode}) {
+  void _saveItem({String? itemId, required String name, required String category, required int qty, required double price, String? barcode}) {
     if (name.isEmpty) return;
     final data = {
       'name': name, 
       'category': category, 
       'quantity': qty, 
+      'price': price,
       'barcode': barcode,
       'ownerEmail': FirebaseAuth.instance.currentUser?.email, 
       'updatedAt': FieldValue.serverTimestamp()

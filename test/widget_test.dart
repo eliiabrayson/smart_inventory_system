@@ -7,15 +7,32 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 
+import 'package:smart_inventory_system/firebase_options.dart';
 import 'package:smart_inventory_system/main.dart';
+import 'package:smart_inventory_system/screens/dashboard_screen.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const SmartInventoryApp());
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    try {
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    } catch (_) {}
+  });
 
-    // Basic assertion to ensure the app loads without crashing.
-    expect(find.byType(MaterialApp), findsOneWidget);
+  testWidgets('Dashboard overview renders the main summary cards', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ChangeNotifierProvider(
+        create: (_) => AppStateProvider(),
+        child: const MaterialApp(home: DashboardScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Overview'), findsOneWidget);
+    expect(find.text('Top Selling Product'), findsOneWidget);
   });
 }

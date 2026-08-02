@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+import '../main.dart';
 import '../services/predictive_service.dart';
 import 'predictive_module_screen.dart';
 import 'report_generation_screen.dart';
@@ -25,11 +27,42 @@ class _SmartModulesHubScreenState extends State<SmartModulesHubScreen> {
 
   Future<void> _getPrediction() async {
     setState(() => _loading = true);
-    final pred = await _svc.predict([0.1, 0.2, 0.3, 0.4, 0.5]);
+    double? pred;
+    try {
+      pred = await _svc.predict([0.1, 0.2, 0.3, 0.4, 0.5]);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Prediction error: $e. Make sure python_api is running.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
     setState(() {
       _lastPrediction = pred;
       _loading = false;
     });
+
+    if (pred != null && mounted) {
+      Provider.of<AppStateProvider>(context, listen: false).addNotification(
+        'Quick Demand Prediction',
+        'Quick prediction completed successfully. Predicted value: ${pred.toStringAsFixed(3)}',
+        payload: {
+          'type': 'prediction',
+          'value': pred,
+          'features': [0.1, 0.2, 0.3, 0.4, 0.5],
+        },
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Successfully predicted: ${pred.toStringAsFixed(3)}'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   @override
@@ -85,13 +118,6 @@ class _SmartModulesHubScreenState extends State<SmartModulesHubScreen> {
                         )),
                         const SizedBox(height: 12),
                         SizedBox(width: double.infinity, child: ModuleCard(
-                          title: 'Reorder Helper',
-                          subtitle: 'Suggest reorder quantities',
-                          icon: Icons.shopping_cart_checkout,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReorderModuleScreen())),
-                        )),
-                        const SizedBox(height: 12),
-                        SizedBox(width: double.infinity, child: ModuleCard(
                           title: 'Notifications',
                           subtitle: 'View system alerts and reports',
                           icon: Icons.notifications,
@@ -135,12 +161,6 @@ class _SmartModulesHubScreenState extends State<SmartModulesHubScreen> {
                               if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No items to forecast')));
                               return;
                             }
-                            final month = DateTime.now().month;
-                            String season = 'spring';
-                            if (month >= 3 && month <= 5) season = 'spring';
-                            if (month >= 6 && month <= 8) season = 'summer';
-                            if (month >= 9 && month <= 11) season = 'autumn';
-                            if (month == 12 || month <= 2) season = 'winter';
                             final lat = -1.2921;
                             final lon = 36.8219;
                             final body = {
@@ -149,11 +169,12 @@ class _SmartModulesHubScreenState extends State<SmartModulesHubScreen> {
                                 final features = [qty / 100.0, 0.0, 0.0, 0.0, 0.0];
                                 return {
                                   'features': features,
-                                  'season': season,
+                                  'calendar_event': 0,
+                                  'lead_time': 7.0,
+                                  'market_trend': 0.0,
                                   'latitude': lat,
                                   'longitude': lon,
                                   'fetch_weather': true,
-                                  'country_code': 'KE',
                                 };
                               }).toList()
                             };
@@ -171,13 +192,29 @@ class _SmartModulesHubScreenState extends State<SmartModulesHubScreen> {
                                   final suggested = (pred - qty).round();
                                   paired.add({'id': it['id'], 'name': it['name'] ?? 'Unknown', 'qty': qty, 'prediction': pred, 'suggested': suggested});
                                 }
-                                if (mounted) {
-                                  showDialog(context: context, builder: (ctx) => AlertDialog(
-                                    title: const Text('Batch Forecast'),
-                                    content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: paired.map((p) => ListTile(title: Text(p['name']), subtitle: Text('Current: ${p['qty']}, Predicted: ${p['prediction'].toStringAsFixed(2)}'), trailing: Text('Reorder: ${p['suggested']}'))).toList()))),
-                                    actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
-                                  ));
-                                }
+                                 Provider.of<AppStateProvider>(context, listen: false).addNotification(
+                                   'Batch Demand Forecast',
+                                   'Batch forecast completed successfully for ${paired.length} products.',
+                                   payload: {
+                                     'type': 'batch_forecast',
+                                     'results': paired,
+                                   },
+                                 );
+
+                                 if (mounted) {
+                                   ScaffoldMessenger.of(context).showSnackBar(
+                                     const SnackBar(
+                                       content: Text('Batch forecast completed successfully!'),
+                                       backgroundColor: Colors.green,
+                                     ),
+                                   );
+
+                                   showDialog(context: context, builder: (ctx) => AlertDialog(
+                                     title: const Text('Batch Forecast'),
+                                     content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: paired.map((p) => ListTile(title: Text(p['name']), subtitle: Text('Current: ${p['qty']}, Predicted: ${p['prediction'].toStringAsFixed(2)}'), trailing: Text('Reorder: ${p['suggested']}'))).toList()))),
+                                     actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+                                   ));
+                                 }
                               } else {
                                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Forecast failed: ${resp.statusCode}')));
                               }
